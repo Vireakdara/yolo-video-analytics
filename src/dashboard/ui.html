@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Analytics Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #0f0f0f;
+            color: #fff;
+            padding: 20px;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            background: linear-gradient(90deg, #00ff88, #00aaff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stats {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: #1a1a1a;
+            border-radius: 10px;
+            padding: 16px 24px;
+            border-left: 3px solid #00ff88;
+        }
+
+        .stat-card h2 {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #00ff88;
+        }
+
+        .stat-card p {
+            color: #888;
+            font-size: 0.85rem;
+        }
+
+        .detections {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 12px;
+        }
+
+        .detection-card {
+            background: #1a1a1a;
+            border-radius: 10px;
+            padding: 14px 16px;
+            border-left: 3px solid #00aaff;
+        }
+
+        .detection-card .track-id {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #00aaff;
+        }
+
+        .detection-card .class-name {
+            font-size: 0.95rem;
+            color: #fff;
+            text-transform: capitalize;
+            margin: 4px 0;
+        }
+
+        .detection-card .confidence {
+            font-size: 0.8rem;
+            color: #888;
+        }
+
+        .status {
+            font-size: 0.8rem;
+            color: #888;
+            margin-bottom: 16px;
+        }
+
+        .status span {
+            color: #00ff88;
+        }
+    </style>
+</head>
+<body>
+    <h1>Video Analytics Dashboard</h1>
+
+    <div class="status">Last updated: <span id="lastUpdated">--</span></div>
+
+    <div class="stats">
+        <div class="stat-card">
+            <h2 id="totalCount">0</h2>
+            <p>Objects Tracked</p>
+        </div>
+        <div class="stat-card">
+            <h2 id="personCount">0</h2>
+            <p>Persons</p>
+        </div>
+    </div>
+
+    <div class="detections" id="detections"></div>
+
+    <script>
+        const COCO_CLASSES = {
+            0: 'person', 1: 'bicycle', 2: 'car', 3: 'motorcycle',
+            4: 'airplane', 5: 'bus', 6: 'train', 7: 'truck',
+            8: 'boat', 9: 'traffic light', 10: 'fire hydrant',
+            14: 'bird', 15: 'cat', 16: 'dog', 17: 'horse',
+            39: 'bottle', 41: 'cup', 56: 'chair', 57: 'couch',
+            60: 'dining table', 62: 'tv', 63: 'laptop',
+            64: 'mouse', 67: 'cell phone', 73: 'book'
+        };
+
+        async function fetchDetections() {
+            try {
+                const response = await fetch('/detections');
+                const data = await response.json();
+
+                document.getElementById('totalCount').textContent = data.count;
+                document.getElementById('lastUpdated').textContent = new Date().toLocaleTimeString();
+
+                const persons = data.detections.filter(d => d.class_id === 0).length;
+                document.getElementById('personCount').textContent = persons;
+
+                const container = document.getElementById('detections');
+                container.innerHTML = '';
+
+                data.detections.forEach(det => {
+                    const className = COCO_CLASSES[det.class_id] || `class_${det.class_id}`;
+                    const conf = (det.confidence * 100).toFixed(1);
+                    container.innerHTML += `
+                        <div class="detection-card">
+                            <div class="track-id">ID: ${det.track_id}</div>
+                            <div class="class-name">${className}</div>
+                            <div class="confidence">Confidence: ${conf}%</div>
+                        </div>`;
+                });
+
+            } catch (err) {
+                console.error('Failed to fetch detections:', err);
+            }
+        }
+
+        setInterval(fetchDetections, 1000);
+        fetchDetections();
+    </script>
+</body>
+</html>

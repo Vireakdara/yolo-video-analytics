@@ -1,8 +1,13 @@
 from fastapi import FastAPI
 from typing import List, Dict, Any
 import uvicorn
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 app = FastAPI(title="YOLO Video Analytics API")
+@app.get("/dashboard")
+def dashboard():
+    return FileResponse("E:\\yolo-video-analytics\\src\\dashboard\\ui.html")
 
 latest_detections: List[Dict[str, Any]] = []
 
