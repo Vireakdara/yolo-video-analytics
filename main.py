@@ -2,10 +2,24 @@ import cv2
 import yaml
 from src.inference.detector import Detector
 from src.tracking.tracker import Tracker
+import requests
+import threading
 
 def load_config(config_path: str = "./configs/config.yaml") -> dict:
     with open(config_path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
+
+
+def post_detections(detections: list) -> None:
+    try:
+        requests.post(
+            "http://localhost:8080/detections",
+            json=detections,
+            timeout=0.1
+        )
+    except requests.exceptions.RequestException as e:
+        pass
+
 
 def main():
 
@@ -37,6 +51,12 @@ def main():
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
             cv2.putText(frame, label, (x1, y1 - 10),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+
+        threading.Thread(
+            target=post_detections, 
+            args=(results,),
+            daemon=True
+        ).start()
 
         cv2.imshow("Tracking", frame)
         if cv2.waitKey(1) & 0xFF == ord("q"):
