@@ -1,25 +1,30 @@
+import time
 import cv2
 import yaml
 from src.inference.detector import Detector
 from src.tracking.tracker import Tracker
 import requests
 import threading
+import redis
+import json
+
+redis_client = redis.Redis(host='127.0.0.1', port=6379, db=0)
 
 def load_config(config_path: str = "./configs/config.yaml") -> dict:
     with open(config_path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
-
-def post_detections(detections: list) -> None:
+def post_detections(detections: list, fps: float = 0.0) -> None:
     try:
-        requests.post(
-            "http://localhost:8080/detections",
-            json=detections,
-            timeout=0.1
-        )
-    except requests.exceptions.RequestException as e:
-        pass
-
+        payload = {
+            "timestamp": time.time(),
+            "fps": round(fps, 1),
+            "detections": detections
+        }
+        redis_client.lpush("detections", json.dumps(payload))
+        redis_client.ltrim("detections", 0, 99)
+    except Exception as e:
+        print(f"Redis error: {e}")
 
 def main():
 
@@ -30,11 +35,18 @@ def main():
 
     tracker = Tracker(model_path=model_path, conf_threshold=conf_threshold)
     cap = cv2.VideoCapture(video_path)
+    redis_client.delete("detections")
+    redis_client.set("session", "new")
+    print("Redis cleared - starting fresh session")
     class_names = config.get("classes", {})
     
     if not cap.isOpened():
         print("Error: Cannot open video")
         return
+    
+    frame_count = 0
+    fps_start = time.time()
+    current_fps = 0.0
 
     while True:
         ret, frame = cap.read()
@@ -42,6 +54,13 @@ def main():
             break
 
         results = tracker.track(frame)
+
+        frame_count += 1
+        elapsed = time.time() - fps_start
+        if elapsed >= 1.0:
+            current_fps = frame_count / elapsed
+            frame_count = 0
+            fps_start = time.time()
 
         for obj in results:
             x1, y1, x2, y2 = [int(v) for v in obj["bbox"]]
@@ -53,8 +72,8 @@ def main():
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
         threading.Thread(
-            target=post_detections, 
-            args=(results,),
+            target=post_detections,
+            args=(results, current_fps),
             daemon=True
         ).start()
 

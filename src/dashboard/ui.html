@@ -14,18 +14,62 @@
             padding: 20px;
         }
 
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
         h1 {
             font-size: 1.5rem;
-            margin-bottom: 20px;
             background: linear-gradient(90deg, #00ff88, #00aaff);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            color: #888;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ff4444;
+        }
+
+        .status-dot.connected {
+            background: #00ff88;
+        }
+
+        .clear-btn {
+            background: #2a2a2a;
+            color: #fff;
+            border: 1px solid #444;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        .clear-btn:hover { background: #333; }
+
         .stats {
             display: flex;
             gap: 16px;
             margin-bottom: 24px;
+            flex-wrap: wrap;
         }
 
         .stat-card {
@@ -33,7 +77,11 @@
             border-radius: 10px;
             padding: 16px 24px;
             border-left: 3px solid #00ff88;
+            min-width: 120px;
         }
+
+        .stat-card.fps { border-left-color: #ff6600; }
+        .stat-card.objects { border-left-color: #00aaff; }
 
         .stat-card h2 {
             font-size: 2rem;
@@ -41,14 +89,52 @@
             color: #00ff88;
         }
 
+        .stat-card.fps h2 { color: #ff6600; }
+        .stat-card.objects h2 { color: #00aaff; }
+
         .stat-card p {
             color: #888;
             font-size: 0.85rem;
         }
 
+        .last-updated {
+            font-size: 0.8rem;
+            color: #888;
+            margin-bottom: 16px;
+        }
+
+        .last-updated span { color: #00ff88; }
+
+        .class-stats {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 24px;
+        }
+
+        .class-badge {
+            background: #1a1a1a;
+            border-radius: 20px;
+            padding: 6px 14px;
+            font-size: 0.85rem;
+            border: 1px solid #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .class-badge .count {
+            background: #00aaff;
+            color: #000;
+            border-radius: 10px;
+            padding: 2px 8px;
+            font-weight: bold;
+            font-size: 0.75rem;
+        }
+
         .detections {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
             gap: 12px;
         }
 
@@ -60,13 +146,13 @@
         }
 
         .detection-card .track-id {
-            font-size: 1.1rem;
+            font-size: 1rem;
             font-weight: bold;
             color: #00aaff;
         }
 
         .detection-card .class-name {
-            font-size: 0.95rem;
+            font-size: 0.9rem;
             color: #fff;
             text-transform: capitalize;
             margin: 4px 0;
@@ -77,33 +163,40 @@
             color: #888;
         }
 
-        .status {
-            font-size: 0.8rem;
-            color: #888;
-            margin-bottom: 16px;
-        }
-
-        .status span {
-            color: #00ff88;
+        .no-session {
+            text-align: center;
+            color: #444;
+            padding: 60px 0;
+            font-size: 1rem;
         }
     </style>
 </head>
 <body>
-    <h1>Video Analytics Dashboard</h1>
-
-    <div class="status">Last updated: <span id="lastUpdated">--</span></div>
-
-    <div class="stats">
-        <div class="stat-card">
-            <h2 id="totalCount">0</h2>
-            <p>Objects Tracked</p>
-        </div>
-        <div class="stat-card">
-            <h2 id="personCount">0</h2>
-            <p>Persons</p>
+    <div class="header">
+        <h1>Video Analytics Dashboard</h1>
+        <div class="header-right">
+            <div class="status">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Disconnected</span>
+            </div>
+            <button class="clear-btn" id="clearBtn">Clear Session</button>
         </div>
     </div>
 
+    <div class="last-updated">Last updated: <span id="lastUpdated">--</span></div>
+
+    <div class="stats">
+        <div class="stat-card objects">
+            <h2 id="totalCount">0</h2>
+            <p>Objects Tracked</p>
+        </div>
+        <div class="stat-card fps">
+            <h2 id="fpsCount">0</h2>
+            <p>FPS</p>
+        </div>
+    </div>
+
+    <div class="class-stats" id="classStats"></div>
     <div class="detections" id="detections"></div>
 
     <script>
@@ -114,41 +207,106 @@
             14: 'bird', 15: 'cat', 16: 'dog', 17: 'horse',
             39: 'bottle', 41: 'cup', 56: 'chair', 57: 'couch',
             60: 'dining table', 62: 'tv', 63: 'laptop',
-            64: 'mouse', 67: 'cell phone', 73: 'book'
+            64: 'mouse', 67: 'cell phone', 73: 'book',
+            24: 'backpack', 25: 'umbrella', 26: 'handbag',
+            28: 'suitcase', 32: 'sports ball', 36: 'skateboard'
         };
 
-        async function fetchDetections() {
-            try {
-                const response = await fetch('/detections');
-                const data = await response.json();
+        const COLORS = [
+            '#00aaff', '#00ff88', '#ff6600', '#ff0088',
+            '#ffff00', '#00ffff', '#ff4444', '#aa00ff'
+        ];
 
-                document.getElementById('totalCount').textContent = data.count;
+        let ws;
+        let paused = false;
+
+        function connect() {
+            ws = new WebSocket('ws://127.0.0.1:8080/ws');
+
+            ws.onopen = function() {
+                document.getElementById('statusDot').classList.add('connected');
+                document.getElementById('statusText').textContent = 'Connected';
+            };
+
+            ws.onmessage = async function(event) {
+                const text = event.data instanceof Blob
+                    ? await event.data.text()
+                    : event.data;
+
+                if (text === 'CLEAR') {
+                    paused = false;
+                    clearDashboard('New session started');
+                    return;
+                }
+
+                if (paused) return;
+                const payload = JSON.parse(text);
+                const detections = payload.detections;
+                const fps = payload.fps || 0;
+
+                document.getElementById('totalCount').textContent = detections.length;
+                document.getElementById('fpsCount').textContent = fps;
                 document.getElementById('lastUpdated').textContent = new Date().toLocaleTimeString();
 
-                const persons = data.detections.filter(d => d.class_id === 0).length;
-                document.getElementById('personCount').textContent = persons;
+                // Class counts
+                const classCounts = {};
+                detections.forEach(det => {
+                    const name = COCO_CLASSES[det.class_id] || `class_${det.class_id}`;
+                    classCounts[name] = (classCounts[name] || 0) + 1;
+                });
 
+                const classStats = document.getElementById('classStats');
+                classStats.innerHTML = '';
+                Object.entries(classCounts).forEach(([name, count]) => {
+                    classStats.innerHTML += `
+                        <div class="class-badge">
+                            ${name}
+                            <span class="count">${count}</span>
+                        </div>`;
+                });
+
+                // Detection cards
                 const container = document.getElementById('detections');
                 container.innerHTML = '';
-
-                data.detections.forEach(det => {
+                detections.forEach((det, i) => {
+                    const color = COLORS[i % COLORS.length];
                     const className = COCO_CLASSES[det.class_id] || `class_${det.class_id}`;
                     const conf = (det.confidence * 100).toFixed(1);
                     container.innerHTML += `
-                        <div class="detection-card">
+                        <div class="detection-card" style="border-left-color: ${color}">
                             <div class="track-id">ID: ${det.track_id}</div>
                             <div class="class-name">${className}</div>
                             <div class="confidence">Confidence: ${conf}%</div>
                         </div>`;
                 });
+            };
 
-            } catch (err) {
-                console.error('Failed to fetch detections:', err);
-            }
+            ws.onclose = function() {
+                document.getElementById('statusDot').classList.remove('connected');
+                document.getElementById('statusText').textContent = 'Disconnected';
+                setTimeout(connect, 3000);
+            };
+
+            ws.onerror = function() {
+                document.getElementById('statusText').textContent = 'Error';
+            };
         }
 
-        setInterval(fetchDetections, 1000);
-        fetchDetections();
+        function clearDashboard(message) {
+            document.getElementById('totalCount').textContent = 0;
+            document.getElementById('fpsCount').textContent = 0;
+            document.getElementById('classStats').innerHTML = '';
+            document.getElementById('detections').innerHTML =
+                `<div class="no-session">${message}</div>`;
+            document.getElementById('lastUpdated').textContent = message;
+        }
+
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            paused = true;
+            clearDashboard('Session cleared by user');
+        });
+
+        connect();
     </script>
 </body>
 </html>
