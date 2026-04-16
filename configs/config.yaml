@@ -1,5 +1,6 @@
 model:
   path: "yolov8n.pt"
+  # path: "yolov8n.onnx"
   conf_threshold: 0.25
 
 video:
