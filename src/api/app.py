@@ -6,8 +6,19 @@ import uvicorn
 from fastapi.responses import FileResponse
 import yaml
 import time
+from prometheus_client import Counter, Gauge, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from fastapi.responses import Response
+
 
 app = FastAPI(title="YOLO Video Analytics API")
+
+# Metrics
+fps_gauge = Gauge("yolo_fps", "Current inference FPS")
+objects_gauge = Gauge("yolo_objects_tracked", "Current number of objects being ")
+detections_counter = Counter("yolo_detections_total", "Total detections since start")
+class_counter = Counter("yolo_class_detections_total", "Detections per class", ["class_name"])
+latency_histogram = Histogram("yolo_inference_latency_ms", "Inference latency in ms")
+
 
 redis_client = redis.Redis(
     host="127.0.0.1",
@@ -69,6 +80,14 @@ async def websocket_endpoint(websocket: WebSocket):
                 payload = json.loads(data)
                 detections = payload.get("detections", [])
 
+                fps_gauge.set(payload.get("fps", 0))
+                objects_gauge.set(len(detections))
+                detections_counter.inc(len(detections))
+
+                for det in detections:
+                    class_name = str(det.get("class_id", "unknown"))
+                    class_counter.labels(class_name=class_name).inc()
+
                 # Merge into session accumulator
                 for det in detections:
                     session_objects[det["track_id"]] = det
@@ -92,6 +111,10 @@ async def websocket_endpoint(websocket: WebSocket):
 @app.get("/dashboard")
 def dashboard():
     return FileResponse('src\\dashboard\\ui.html')
+
+@app.get("/metrics")
+def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 if __name__ == "__main__":
